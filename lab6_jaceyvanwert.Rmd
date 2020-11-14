@@ -1,0 +1,184 @@
+---
+title: "Week 6 - ESM 206"
+author: "Jacey Van Wert"
+date: "11/13/2020"
+output: html_document
+---
+
+This code-along will practice non-parametric test Mann-Whitney U, which is an alternative to the independent samples t-test. The code-along will also practice linear regressions. The key code and html are in this lab6 folder.
+
+## Part 1: Attach packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(palmerpenguins)
+library(ggpubr)
+library(broom)
+```
+
+## Part 2: Rank-based test example (Mann Whitney U)
+
+Will be using wilcox.test() function to run a Mann-Whitney U test.
+
+Set up using sample.int() to create random samples with integers from 1 to x, of size =? with replacement. [The set.seed allows for numbers to be pseudorandom- random for the problem, but the same across users]
+
+
+
+```{r}
+set.seed(1414)
+gp_1 <- sample.int(20, size=15, replace = TRUE)
+
+set.seed(1424)
+gp_2 <- sample.int(30, size=15, replace = TRUE)
+```
+
+Is there evidence for a sign difference in ranks (medians) between the pops from which gp_1 and gp_2 were drawn?
+
+### Explore data
+
+```{r}
+hist(gp_1)
+```
+
+```{r}
+hist(gp_2)
+```
+
+
+Reasons to use a rank-based test:
+1. not clearly normally distributed from these exploratory histograms
+2. somewhat small sample size (n=15 for each)
+3. i believe that ranks (medians) are more valuable to compare for these data
+
+Is there a significant difference in ranks (medians) between gp_1 and gp_2?
+
+```{r}
+my_mwu <- wilcox.test(gp_1,gp_2)
+```
+
+A p-value of 0.28 indicates that: if the null hypothesis is true (these samples were drawn from pops with the same median) then there is a 28% chance we could have found median values at least as different as ours by chance. There is not sufficient evidence to reject the null hypothesis of equal ranks using a sign level of 0.05. 
+
+Would use a kruskal.test for a rank based test for comparing medians across more than two groups (the rank based test alternative to one-way ANOVA). 
+
+## Part 3: Simple linear regression
+
+Explore relationship between flipper length and body mass for penguins. 
+
+### A. Exploratory scatterplot
+```{r}
+ggplot(data = penguins, aes (
+  x=flipper_length_mm,
+  y=body_mass_g))+
+  geom_point()
+```
+
+1. Does it look like a linear relationship makes sense?
+yes
+2. Do we have concerns about modeling as a linear relationship?
+no
+3. Notable outliers?
+no
+4. Initial thoughts about homoscedasticity?
+seem ok so far
+
+### B. Model it
+Using lm(), first making the model:
+```{r}
+#linear model stored as penguin_lm
+penguin_lm <- lm(body_mass_g~flipper_length_mm, data =penguins)
+
+#return overview
+summary(penguin_lm)
+```
+Interpretation: 
+- both intercept and flipper length coefficients are sign diff from zero (not interesting
+- the multiple r2 value is 0.759; 75% of variance in body mass is explained by flipper length
+
+### C. Access model outputs
+
+We can access the coefficients for the model using:
+- the slope (g/mm)
+- the y intercept (g)
+- the full equation is mass = 49.69* (flipper length) + (-5780.83)
+
+We can use broom::tidy() to get the model outputs in a nice data frame format:
+```{r}
+penguin_lm_tidy <- broom::tidy(penguin_lm)
+```
+
+Can get different outputs:
+```{r}
+penguin_int <- penguin_lm_tidy$estimate[1]
+penguin_int
+```
+
+```{r}
+penguin_coef <- penguin_lm_tidy$estimate[2]
+penguin_coef
+```
+
+Other model information (DF, F stat, p value) are better accessessed using broom:;glance(). 
+
+```{r}
+penguin_lm_out <- broom::glance(penguin_lm)
+penguin_lm_out
+```
+
+You can automatically reference output in text.
+
+For example:
+
+"Simple linear regression was used to explore the relationship between penguin flipper length (mm) and body mass (g) across all three penguin species, and including both male and female penguins. A significant regression model was found ($\beta$ = `r round(penguin_coef,3)`, F(`r penguin_lm_out$df`,`r penguin_lm_out$df.residual`) = `r round(penguin_lm_out$statistic,1)`, p < 0.001) with an R^2^ of `r round(penguin_lm_out$r.squared,3)`."
+
+### D. Explore model assumptions
+
+must check:
+1. linearly related variables (yup)
+2. normally distributed residuals
+3. homoscedasticity (constant residuals variance)
+4. iid residuals (no serial correlation)- more often a concern in time series data
+
+```{r}
+plot(penguin_lm)
+```
+
+
+- first plot: fitted values vs residuals
+- second plot: qq plot for residuals
+- third plot: another way of looking at fitted vs residuals
+- fourth plot: cook's distance: measure of influence or leverage that individual points have on the model- often used to explore outliers
+
+### E. Visualize model
+uses geom_smooth(method = "lm") to add line
+ggpubr::stat_cor() and stat_regline_equation() to add eqtn
+```{r}
+ggplot(data = penguins, 
+       aes(x = flipper_length_mm,
+           y = body_mass_g))+
+  geom_point(size = 2)+
+  geom_smooth(method = "lm",
+              color="red",
+              size = 0.5,
+              fill = "gray10",
+              alpha = 0.5)+
+  theme_light()+
+  ggpubr::stat_regline_equation(label.x=180,label.y=5700)
+```
+
+### F. Find Pearson's r for correlation:
+
+Coeff of determin (R2) tells us how much variance in dependent variable is explained by the model. 
+
+The strength of the correlation (degree of relationship) between two variables can be expressed using Pearson's r. 
+
+Uses cor.test() 
+
+```{r}
+penguins_cor <- cor.test(penguins$flipper_length_mm, penguins$body_mass_g)
+
+penguins_cor
+```
+Here, we see that there is a strong positive correlation between penguin flipper length and body mass (*r* = `r round(penguins_cor$estimate,2)`, t(`r penguins_cor$parameter`) = `r round(penguins_cor$statistic,2)`, p < 0.001). )
+
+# Fin 
